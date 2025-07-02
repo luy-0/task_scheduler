@@ -1,0 +1,4 @@
+schedule: "*/30 * * * * *"  # 每30s执行一次
+params:
+  retry_count: 3
+  data_path: "/tmp/app2_data" 

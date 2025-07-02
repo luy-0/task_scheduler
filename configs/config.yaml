@@ -1,0 +1,9 @@
+log_level: "info"
+plugins_dir: "./plugins"
+tasks:
+  - name: "app1"
+    config_file: "configs/tasks/app1.yaml"
+    enabled: true
+  - name: "app2"
+    config_file: "configs/tasks/app2.yaml"
+    enabled: true 
