@@ -5,14 +5,22 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
 	"task_scheduler/internal/config"
 	"task_scheduler/internal/core"
+	"task_scheduler/pkg/pushAPI"
 	"task_scheduler/plugins/app1"
 	"task_scheduler/plugins/app2"
 )
 
 func main() {
+	main_pushAPI()
+}
+
+func main_pushAPI() {
+	pushAPI.ExampleUsage()
+}
+
+func main_main() {
 	log.Println("启动定时任务调度器...")
 
 	// 创建配置加载器

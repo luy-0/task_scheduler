@@ -5,25 +5,49 @@
 ## 架构设计
 
 ### 三层架构
-- **接口层**: 对外提供统一服务接口
-- **控制层**: 管理消息生命周期和推送策略
-- **实现层**: 具体推送方式的插件化实现
+- **接口层**: 对外提供统一服务接口 (`api.go`, `types.go`)
+- **控制层**: 管理消息生命周期和推送策略 (`core/`)
+- **实现层**: 具体推送方式的插件化实现 (`push_method/`)
 
 ### 核心组件
-- `PushController`: 核心推送控制器
-- `MessageQueue`: 消息队列管理
-- `DelayHandler`: 延迟文件处理
-- `PusherRouter`: 推送策略路由
-- `PusherRegistry`: 推送器注册表
+- `core.PushController`: 核心推送控制器
+- `core.DelayHandler`: 延迟文件处理
+- `core.PusherRouter`: 推送策略路由
+- `core.PusherRegistry`: 推送器注册表
+- `push_method/`: 各种推送器实现
 
 ## 功能特性
 
 - 🔌 **插件化架构**: 支持自定义推送器
 - 📨 **多种推送方式**: 微信、邮件、短信等
-- 🕐 **延迟处理**: 支持延迟文件推送
-- 📊 **消息队列**: 内存队列，支持批量推送
+- 🕐 **延迟处理**: 使用文件存储延迟消息
+- 📊 **文件队列**: 基于文件的延迟消息处理
 - 🛡️ **错误处理**: 完善的错误处理和重试机制
 - 📈 **健康检查**: 推送器健康状态监控
+
+## 目录结构
+
+```
+pkg/pushAPI/
+├── api.go              # 对外API接口实现
+├── types.go            # 对外类型定义
+├── example_test.go     # 使用示例
+├── README.md           # 文档说明
+├── core/               # 核心实现
+│   ├── types.go        # 内部类型定义
+│   ├── interfaces.go   # 内部接口定义
+│   ├── base_pusher.go  # 基础推送器
+│   ├── controller.go   # 推送控制器
+│   ├── delay_handler.go # 延迟文件处理
+│   ├── registry.go     # 推送器注册表
+│   ├── router.go       # 推送策略路由
+│   └── queue.go        # 内存队列（已废弃）
+└── push_method/        # 推送器实现
+    ├── wechat_pusher.go # 微信推送器
+    ├── email_pusher.go  # 邮件推送器
+    ├── sms_pusher.go    # 短信推送器
+    └── log_pusher.go    # 日志推送器
+```
 
 ## 快速开始
 
@@ -87,10 +111,23 @@ func NewMyPusher() *MyPusher {
     }
 }
 
+func (mp *MyPusher) Name() string {
+    return mp.BasePusher.Name
+}
+
 func (mp *MyPusher) Push(msg pushAPI.Message) error {
     // 实现自定义推送逻辑
     log.Printf("自定义推送: %s", msg.Content)
     return nil
+}
+
+func (mp *MyPusher) Validate(options pushAPI.PushOptions) error {
+    // 验证配置
+    return nil
+}
+
+func (mp *MyPusher) HealthCheck() bool {
+    return true
 }
 
 // 使用自定义推送器
@@ -103,13 +140,13 @@ if err := api.InitializeWithPusher(cfg, customPusher); err != nil {
 }
 ```
 
-### 3. 队列推送
+### 3. 延迟推送
 
 ```go
-// 入队消息
+// 入队消息（使用文件存储）
 message := pushAPI.Message{
-    ID:      "queue_msg_001",
-    Content: "这是一条队列消息",
+    ID:      "delay_msg_001",
+    Content: "这是一条延迟消息",
     Level:   "normal",
 }
 
@@ -119,14 +156,14 @@ options := pushAPI.PushOptions{
     Retry:     2,
 }
 
-// 入队
+// 入队（写入延迟文件）
 if err := api.Enqueue(message, options); err != nil {
     log.Printf("入队失败: %v", err)
 }
 
-// 手动刷新队列
+// 手动处理延迟文件
 if err := api.FlushQueue(); err != nil {
-    log.Printf("刷新队列失败: %v", err)
+    log.Printf("处理延迟文件失败: %v", err)
 }
 ```
 
@@ -136,7 +173,7 @@ if err := api.FlushQueue(); err != nil {
 
 ```go
 type Config struct {
-    QueueSize     int           // 队列大小
+    QueueSize     int           // 队列大小（已废弃，使用文件存储）
     FlushInterval time.Duration // 刷新间隔
     DelayDir      string        // 延迟文件目录
     ProcessedDir  string        // 已处理文件目录
@@ -208,7 +245,7 @@ type PushOptions struct {
 - 示例: `delay_20230701_1200.msg`
 
 ### 存储格式
-JSON Lines格式，每条消息一行
+JSON格式，包含消息和推送选项
 
 ### 处理策略
 - 每小时检查一次新文件
@@ -242,19 +279,39 @@ type CustomPusher struct {
     // 自定义字段
 }
 
+func (cp *CustomPusher) Name() string {
+    return cp.BasePusher.Name
+}
+
 func (cp *CustomPusher) Push(msg pushAPI.Message) error {
     // 实现推送逻辑
     return nil
 }
+
+func (cp *CustomPusher) Validate(options pushAPI.PushOptions) error {
+    // 验证配置
+    return nil
+}
+
+func (cp *CustomPusher) HealthCheck() bool {
+    return true
+}
 ```
 
-### 注册推送器
+## 架构变更说明
 
-```go
-registry := pushAPI.NewPusherRegistry()
-customPusher := NewCustomPusher()
-registry.Register("custom", customPusher)
-```
+### v2.0 主要变更
+
+1. **延迟处理重构**: 从内存队列改为文件存储
+2. **代码结构优化**: 内部实现移至 `core/` 目录
+3. **推送器分离**: 推送器实现移至 `push_method/` 目录
+4. **接口简化**: 外部接口保持稳定，内部实现重构
+
+### 向后兼容性
+
+- 外部API接口保持不变
+- 配置结构保持不变
+- 消息和选项结构保持不变
 
 ## 注意事项
 
@@ -262,4 +319,5 @@ registry.Register("custom", customPusher)
 2. **资源管理**: 记得调用 `Stop()` 方法释放资源
 3. **错误处理**: 推送失败不会影响其他消息
 4. **配置验证**: 初始化时会验证配置参数
-5. **健康检查**: 定期检查推送器健康状态 
+5. **健康检查**: 定期检查推送器健康状态
+6. **文件存储**: 延迟消息现在使用文件存储，确保目录权限正确 

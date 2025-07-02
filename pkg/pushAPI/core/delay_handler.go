@@ -1,4 +1,4 @@
-package pushAPI
+package core
 
 import (
 	"encoding/json"
@@ -9,27 +9,23 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"task_scheduler/pkg/pushAPI/base"
+	"task_scheduler/pkg/pushAPI/push_method"
 	"time"
 )
-
-// DelayMessage 延迟消息结构
-type DelayMessage struct {
-	Message Message     `json:"message"`
-	Options PushOptions `json:"options"`
-}
 
 // FileDelayHandler 文件延迟处理器
 type FileDelayHandler struct {
 	delayDir     string
 	processedDir string
-	pusher       Pusher
+	pusher       push_method.IPusher
 	stopChan     chan struct{}
 	wg           sync.WaitGroup
 	mu           sync.Mutex
 }
 
 // NewFileDelayHandler 创建文件延迟处理器
-func NewFileDelayHandler(delayDir, processedDir string, pusher Pusher) *FileDelayHandler {
+func NewFileDelayHandler(delayDir, processedDir string, pusher push_method.IPusher) *FileDelayHandler {
 	return &FileDelayHandler{
 		delayDir:     delayDir,
 		processedDir: processedDir,
@@ -126,7 +122,7 @@ func (h *FileDelayHandler) processDelayFile(entry fs.DirEntry) error {
 	}
 
 	// 解析延迟消息
-	var delayMsg DelayMessage
+	var delayMsg base.DelayMessage
 	if err := json.Unmarshal(data, &delayMsg); err != nil {
 		return fmt.Errorf("解析延迟消息失败: %w", err)
 	}
@@ -147,7 +143,7 @@ func (h *FileDelayHandler) processDelayFile(entry fs.DirEntry) error {
 }
 
 // WriteDelayFile 写入延迟文件
-func (h *FileDelayHandler) WriteDelayFile(msg Message, options PushOptions) error {
+func (h *FileDelayHandler) WriteDelayFile(msg base.Message, options base.PushOptions) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -162,7 +158,7 @@ func (h *FileDelayHandler) WriteDelayFile(msg Message, options PushOptions) erro
 	filePath := filepath.Join(h.delayDir, filename)
 
 	// 创建延迟消息
-	delayMsg := DelayMessage{
+	delayMsg := base.DelayMessage{
 		Message: msg,
 		Options: options,
 	}

@@ -1,4 +1,4 @@
-package pushAPI
+package base
 
 import (
 	"time"
@@ -11,6 +11,7 @@ const (
 	WeChat PushMethod = iota // 微信推送
 	Email                    // 邮件推送
 	SMS                      // 短信推送
+	Logger                   // 日志推送
 )
 
 // String 返回推送方式的字符串表示
@@ -22,6 +23,8 @@ func (pm PushMethod) String() string {
 		return "email"
 	case SMS:
 		return "sms"
+	case Logger:
+		return "logger"
 	default:
 		return "unknown"
 	}
@@ -34,6 +37,7 @@ type Message struct {
 	Level     string                 `json:"level"`      // 紧急程度(emergency/normal)
 	Metadata  map[string]interface{} `json:"metadata"`   // 扩展元数据
 	CreatedAt time.Time              `json:"created_at"` // 创建时间
+	PushedAt  time.Time              `json:"pushed_at"`  // 推送时间
 }
 
 // PushOptions 推送选项
@@ -43,8 +47,8 @@ type PushOptions struct {
 	Retry     int      `json:"retry"`     // 重试次数
 }
 
-// Config 推送配置
-type Config struct {
+// PushConfig 推送配置
+type PushConfig struct {
 	QueueSize     int           `json:"queue_size"`     // 队列大小
 	FlushInterval time.Duration `json:"flush_interval"` // 刷新间隔
 	DelayDir      string        `json:"delay_dir"`      // 延迟文件目录
@@ -52,11 +56,17 @@ type Config struct {
 }
 
 // DefaultConfig 返回默认配置
-func DefaultConfig() Config {
-	return Config{
+func DefaultConfig() PushConfig {
+	return PushConfig{
 		QueueSize:     1000,
 		FlushInterval: 30 * time.Second,
 		DelayDir:      "./delay",
 		ProcessedDir:  "./processed",
 	}
+}
+
+// DelayMessage 延迟消息结构
+type DelayMessage struct {
+	Message Message     `json:"message"`
+	Options PushOptions `json:"options"`
 }

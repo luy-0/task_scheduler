@@ -1,25 +1,26 @@
-package pushAPI
+package core
 
 import (
 	"fmt"
 	"sync"
+	"task_scheduler/pkg/pushAPI/push_method"
 )
 
 // PusherRegistryImpl 推送器注册表实现
 type PusherRegistryImpl struct {
-	pushers map[string]Pusher
+	pushers map[string]push_method.IPusher
 	mu      sync.RWMutex
 }
 
 // NewPusherRegistry 创建推送器注册表
 func NewPusherRegistry() *PusherRegistryImpl {
 	return &PusherRegistryImpl{
-		pushers: make(map[string]Pusher),
+		pushers: make(map[string]push_method.IPusher),
 	}
 }
 
 // Register 注册推送器
-func (r *PusherRegistryImpl) Register(name string, pusher Pusher) error {
+func (r *PusherRegistryImpl) Register(name string, pusher push_method.IPusher) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -40,7 +41,7 @@ func (r *PusherRegistryImpl) Register(name string, pusher Pusher) error {
 }
 
 // Get 获取推送器
-func (r *PusherRegistryImpl) Get(name string) (Pusher, error) {
+func (r *PusherRegistryImpl) Get(name string) (push_method.IPusher, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

@@ -3,6 +3,7 @@ package pushAPI
 import (
 	"fmt"
 	"log"
+	"task_scheduler/pkg/pushAPI/push_method"
 	"time"
 )
 
@@ -16,8 +17,8 @@ func ExampleUsage() {
 	cfg.QueueSize = 100
 	cfg.FlushInterval = 10 * time.Second
 
-	// 初始化（使用内置推送方式）
-	if err := api.Initialize(cfg, WeChat); err != nil {
+	// 初始化（使用微信推送）
+	if err := api.Initialize(cfg, Logger); err != nil {
 		log.Fatalf("初始化失败: %v", err)
 	}
 	defer func() {
@@ -47,25 +48,25 @@ func ExampleUsage() {
 		log.Printf("立即推送失败: %v", err)
 	}
 
-	// 入队推送
+	// 入队推送（现在使用文件存储）
 	message2 := Message{
 		ID:      "msg_002",
-		Content: "这是一条队列消息",
+		Content: "这是一条延迟消息",
 		Level:   "normal",
 	}
 	if err := api.Enqueue(message2, options); err != nil {
 		log.Printf("入队失败: %v", err)
 	}
 
-	// 等待一段时间让队列刷新
+	// 等待一段时间让延迟处理器处理
 	time.Sleep(15 * time.Second)
 
-	// 手动刷新队列
+	// 手动刷新队列（处理延迟文件）
 	if err := api.FlushQueue(); err != nil {
 		log.Printf("刷新队列失败: %v", err)
 	}
 
-	// 获取队列大小
+	// 获取队列大小（现在总是0，因为使用文件存储）
 	if impl, ok := api.(*PushAPIImpl); ok {
 		fmt.Printf("队列大小: %d\n", impl.GetQueueSize())
 		fmt.Printf("已注册的推送器: %v\n", impl.GetRegisteredPushers())
@@ -75,7 +76,7 @@ func ExampleUsage() {
 // ExampleCustomPusher 自定义推送器示例
 func ExampleCustomPusher() {
 	// 创建自定义推送器
-	customPusher := NewLogPusher()
+	customPusher := push_method.NewLogPusher()
 
 	// 创建推送API实例
 	api := NewPushAPI()
