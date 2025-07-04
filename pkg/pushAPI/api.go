@@ -70,27 +70,36 @@ func (api *PushAPIImpl) PushNow(message Message, options PushOptions) error {
 		return fmt.Errorf("推送API未初始化")
 	}
 
+	// 如果消息ID为空，自动生成
+	if message.ID == "" {
+		coreMsg := base.NewMessage(message.AppID, message.Title, message.Content, message.Level.ToCore())
+		message.ID = coreMsg.ID
+	}
+
 	// 设置消息创建时间
 	if message.CreatedAt.IsZero() {
 		message.CreatedAt = time.Now()
 	}
 
+	// 设置发送状态为等待发送
+	message.SetSendStatus(StatusPending)
+
 	// 转换消息和选项
-	coreMessage := base.Message{
-		ID:        message.ID,
-		Content:   message.Content,
-		Level:     message.Level,
-		Metadata:  message.Metadata,
-		CreatedAt: message.CreatedAt,
+	coreMessage := message.ToCore()
+	coreOptions := options.ToCore()
+
+	// 推送消息
+	if err := api.controller.PushNow(coreMessage, coreOptions); err != nil {
+		// 推送失败，设置状态为失败
+		message.SetSendStatus(StatusFailed)
+		return err
 	}
 
-	coreOptions := base.PushOptions{
-		Receivers: options.Receivers,
-		Priority:  options.Priority,
-		Retry:     options.Retry,
-	}
+	// 推送成功，设置发送时间和状态
+	message.SetSentAt(time.Now())
+	message.SetSendStatus(StatusSuccess)
 
-	return api.controller.PushNow(coreMessage, coreOptions)
+	return nil
 }
 
 // Enqueue 入队消息
@@ -99,25 +108,23 @@ func (api *PushAPIImpl) Enqueue(message Message, options PushOptions) error {
 		return fmt.Errorf("推送API未初始化")
 	}
 
+	// 如果消息ID为空，自动生成
+	if message.ID == "" {
+		coreMsg := base.NewMessage(message.AppID, message.Title, message.Content, message.Level.ToCore())
+		message.ID = coreMsg.ID
+	}
+
 	// 设置消息创建时间
 	if message.CreatedAt.IsZero() {
 		message.CreatedAt = time.Now()
 	}
 
-	// 转换消息和选项
-	coreMessage := base.Message{
-		ID:        message.ID,
-		Content:   message.Content,
-		Level:     message.Level,
-		Metadata:  message.Metadata,
-		CreatedAt: message.CreatedAt,
-	}
+	// 设置发送状态为等待发送
+	message.SetSendStatus(StatusPending)
 
-	coreOptions := base.PushOptions{
-		Receivers: options.Receivers,
-		Priority:  options.Priority,
-		Retry:     options.Retry,
-	}
+	// 转换消息和选项
+	coreMessage := message.ToCore()
+	coreOptions := options.ToCore()
 
 	return api.controller.Enqueue(coreMessage, coreOptions)
 }

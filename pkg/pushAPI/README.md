@@ -77,11 +77,8 @@ func main() {
     }
 
     // 创建消息
-    message := pushAPI.Message{
-        ID:      "msg_001",
-        Content: "这是一条测试消息",
-        Level:   "normal",
-    }
+    message := pushAPI.NewMessageWithDefaultLevel("app1", "测试消息", "这是一条测试消息")
+    message.SetMetadata("source", "test")
 
     // 推送选项
     options := pushAPI.PushOptions{
@@ -91,7 +88,7 @@ func main() {
     }
 
     // 立即推送
-    if err := api.PushNow(message, options); err != nil {
+    if err := api.PushNow(*message, options); err != nil {
         log.Printf("推送失败: %v", err)
     }
 }
@@ -220,11 +217,58 @@ const (
 
 ```go
 type Message struct {
-    ID        string                 // 消息唯一标识
-    Content   string                 // 消息内容
-    Level     string                 // 紧急程度(emergency/normal)
-    Metadata  map[string]interface{} // 扩展元数据
-    CreatedAt time.Time              // 创建时间
+    ID         string                 // 消息唯一标识，自动生成格式：{app_id}_YYMMDD_{gen_id}
+    AppID      string                 // 发送方ID，标志消息来源
+    Title      string                 // 消息标题
+    Content    string                 // 消息内容
+    Level      MessageLevel           // 紧急程度（枚举）
+    Metadata   map[string]interface{} // 扩展元数据
+    CreatedAt  time.Time              // 创建时间
+    SentAt     time.Time              // 最终成功发送时间
+    SendStatus SendStatus             // 发送状态（枚举）
+}
+```
+
+### 消息级别枚举
+
+```go
+type MessageLevel int
+
+const (
+    Normal MessageLevel = iota // 普通消息
+    Emergency                  // 紧急消息
+)
+```
+
+### 发送状态枚举
+
+```go
+type SendStatus int
+
+const (
+    StatusInitialized SendStatus = iota // 初始化
+    StatusPending                       // 等待发送
+    StatusSuccess                       // 成功
+    StatusFailed                        // 失败
+)
+```
+
+### 创建消息
+
+```go
+// 使用默认级别（Normal）创建消息
+message := NewMessageWithDefaultLevel("app1", "消息标题", "消息内容")
+
+// 指定级别创建消息
+message := NewMessage("app1", "紧急通知", "紧急消息内容", Emergency)
+
+// 设置元数据
+message.SetMetadata("user_id", "12345")
+message.SetMetadata("source", "system")
+
+// 获取元数据
+if value, exists := message.GetMetadata("user_id"); exists {
+    fmt.Printf("用户ID: %v\n", value)
 }
 ```
 

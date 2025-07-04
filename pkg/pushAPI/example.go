@@ -27,14 +27,10 @@ func ExampleUsage() {
 		}
 	}()
 
-	// 创建消息
-	message := Message{
-		ID:        "msg_001",
-		Content:   "这是一条测试消息",
-		Level:     "normal",
-		Metadata:  map[string]interface{}{"source": "test"},
-		CreatedAt: time.Now(),
-	}
+	// 创建消息（使用新的构造函数）
+	message := NewNormalMessage("app1", "测试消息", "这是一条测试消息")
+	message.SetMetadata("source", "test")
+	message.SetMetadata("user_id", "12345")
 
 	// 推送选项
 	options := PushOptions{
@@ -44,17 +40,24 @@ func ExampleUsage() {
 	}
 
 	// 立即推送
-	if err := api.PushNow(message, options); err != nil {
+	if err := api.PushNow(*message, options); err != nil {
 		log.Printf("立即推送失败: %v", err)
 	}
 
-	// 入队推送（现在使用文件存储）
-	message2 := Message{
-		ID:      "msg_002",
-		Content: "这是一条延迟消息",
-		Level:   "normal",
+	// 创建紧急消息
+	emergencyMessage := NewMessage("app1", "紧急通知", "这是一条紧急消息", Emergency)
+	emergencyMessage.SetMetadata("alert_type", "system_error")
+
+	// 推送紧急消息
+	if err := api.PushNow(*emergencyMessage, options); err != nil {
+		log.Printf("紧急消息推送失败: %v", err)
 	}
-	if err := api.Enqueue(message2, options); err != nil {
+
+	// 入队推送（现在使用文件存储）
+	delayMessage := NewNormalMessage("app2", "延迟消息", "这是一条延迟消息")
+	delayMessage.SetMetadata("delay_reason", "scheduled")
+
+	if err := api.Enqueue(*delayMessage, options); err != nil {
 		log.Printf("入队失败: %v", err)
 	}
 
@@ -71,6 +74,11 @@ func ExampleUsage() {
 		fmt.Printf("队列大小: %d\n", impl.GetQueueSize())
 		fmt.Printf("已注册的推送器: %v\n", impl.GetRegisteredPushers())
 	}
+
+	// 演示消息状态变化
+	fmt.Printf("消息ID: %s\n", message.ID)
+	fmt.Printf("消息状态: %s\n", message.SendStatus.String())
+	fmt.Printf("发送时间: %v\n", message.SentAt)
 }
 
 // ExampleCustomPusher 自定义推送器示例
@@ -95,11 +103,7 @@ func ExampleCustomPusher() {
 	}()
 
 	// 创建消息
-	message := Message{
-		ID:      "custom_msg_001",
-		Content: "这是一条自定义推送器消息",
-		Level:   "emergency",
-	}
+	message := NewMessage("custom_app", "自定义推送器消息", "这是一条自定义推送器消息", Emergency)
 
 	// 推送选项
 	options := PushOptions{
@@ -109,7 +113,7 @@ func ExampleCustomPusher() {
 	}
 
 	// 推送消息
-	if err := api.PushNow(message, options); err != nil {
+	if err := api.PushNow(*message, options); err != nil {
 		log.Printf("推送失败: %v", err)
 	}
 }
