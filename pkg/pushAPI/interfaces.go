@@ -227,10 +227,14 @@ func (po *PushOptions) ToCore() base.PushOptions {
 type Config struct {
 	QueueSize     int           `json:"queue_size"`     // 队列大小
 	FlushInterval time.Duration `json:"flush_interval"` // 刷新间隔
-	DelayDir      string        `json:"delay_dir"`      // 延迟文件目录
-	ProcessedDir  string        `json:"processed_dir"`  // 已处理文件目录
+	WorkingDir    string        `json:"working_dir"`    // 工作目录（存放延迟和定时消息）
 	HistoryDir    string        `json:"history_dir"`    // 历史消息记录目录
-	WorkingDir    string        `json:"working_dir"`    // 定时推送工作目录
+	WeChatConfig  WeChatConfig  `json:"wechat_config"`  // 微信推送配置
+}
+
+// WeChatConfig 微信推送配置
+type WeChatConfig struct {
+	SendKey string `json:"send_key"` // 方糖气球sendKey
 }
 
 // DefaultConfig 返回默认配置
@@ -238,9 +242,10 @@ func DefaultConfig() Config {
 	return Config{
 		QueueSize:     1000,
 		FlushInterval: 30 * time.Second,
-		DelayDir:      "./tmp/delay",
-		ProcessedDir:  "./tmp/processed",
-		HistoryDir:    "./tmp/history",
 		WorkingDir:    "./tmp/working",
+		HistoryDir:    "./tmp/history",
+		WeChatConfig: WeChatConfig{
+			SendKey: "SCT7671TOKWWHhBntijf0DfzgF5luGPa", // 默认sendKey
+		},
 	}
 }

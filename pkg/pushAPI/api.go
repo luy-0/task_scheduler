@@ -25,10 +25,8 @@ func (api *PushAPIImpl) Initialize(cfg Config, method PushMethod) error {
 	coreConfig := base.PushConfig{
 		QueueSize:     cfg.QueueSize,
 		FlushInterval: cfg.FlushInterval,
-		DelayDir:      cfg.DelayDir,
-		ProcessedDir:  cfg.ProcessedDir,
-		HistoryDir:    cfg.HistoryDir,
 		WorkingDir:    cfg.WorkingDir,
+		HistoryDir:    cfg.HistoryDir,
 	}
 	coreMethod := method.ToCore()
 
@@ -49,10 +47,8 @@ func (api *PushAPIImpl) InitializeWithPusher(cfg Config, pusher Pusher) error {
 	coreConfig := base.PushConfig{
 		QueueSize:     cfg.QueueSize,
 		FlushInterval: cfg.FlushInterval,
-		DelayDir:      cfg.DelayDir,
-		ProcessedDir:  cfg.ProcessedDir,
-		HistoryDir:    cfg.HistoryDir,
 		WorkingDir:    cfg.WorkingDir,
+		HistoryDir:    cfg.HistoryDir,
 	}
 
 	controller := core.NewPushController(coreConfig)

@@ -464,4 +464,45 @@ func (cp *CustomPusher) HealthCheck() bool {
 3. **错误处理**: 推送失败不会影响其他消息
 4. **配置验证**: 初始化时会验证配置参数
 5. **健康检查**: 定期检查推送器健康状态
-6. **文件存储**: 延迟消息现在使用文件存储，确保目录权限正确 
+6. **文件存储**: 延迟消息现在使用文件存储，确保目录权限正确
+
+## 延迟与定时消息统一管理
+
+### 文件结构
+- 所有延迟消息文件：`delay_YYYYMMDD_HH.json`，每4小时一个文件
+- 所有定时消息文件：`scheduled_YYYYMMDD_HH.json`，每4小时一个文件
+- 均存放于`working_dir`目录
+
+### 延迟消息合并与发送
+- 所有延迟消息在以下三种场景会被自动合并并发送：
+  1. 有立即发送（PushNow）时，自动携带所有延迟消息合并发送
+  2. 有定时发送（PushAt）时，自动携带所有延迟消息合并发送
+  3. 每4小时主动触发一次合并发送
+- 合并规则：
+  - 标题为"X条延迟消息"
+  - 内容为所有延迟消息的标题+内容拼接
+  - 接收人去重合并，优先级和重试次数取最大
+- 发送后所有延迟消息文件会被清空并删除
+
+### 定时消息
+- 定时消息到期时自动发送，并自动触发延迟消息合并发送
+- 定时消息和延迟消息文件互不干扰，均按4小时分段
+
+### 代码示例
+```go
+// 入队延迟消息
+msg := pushAPI.NewNormalMessage("app1", "延迟1", "内容1")
+api.Enqueue(*msg, options)
+
+// 定时推送
+scheduledTime := time.Now().Add(1 * time.Hour)
+api.PushAt(*msg, options, scheduledTime)
+
+// 手动触发合并发送所有延迟消息
+api.FlushQueue()
+```
+
+### 注意事项
+- working_dir目录下只会有delay_*.json和scheduled_*.json两类文件
+- 所有延迟消息的发送历史会自动记录到history_dir
+- 不再需要delay/processed目录 

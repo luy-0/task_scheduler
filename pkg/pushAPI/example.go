@@ -53,7 +53,7 @@ func ExampleUsage() {
 		log.Printf("紧急消息推送失败: %v", err)
 	}
 
-	// 入队推送（现在使用文件存储）
+	// 入队推送（延迟消息）
 	delayMessage := NewNormalMessage("app2", "延迟消息", "这是一条延迟消息")
 	delayMessage.SetMetadata("delay_reason", "scheduled")
 
@@ -61,10 +61,14 @@ func ExampleUsage() {
 		log.Printf("入队失败: %v", err)
 	}
 
-	// 等待一段时间让延迟处理器处理
-	time.Sleep(15 * time.Second)
+	// 再入队一条延迟消息
+	delayMessage2 := NewNormalMessage("app2", "延迟消息2", "这是一条第二条延迟消息")
+	delayMessage2.SetMetadata("delay_reason", "scheduled2")
+	if err := api.Enqueue(*delayMessage2, options); err != nil {
+		log.Printf("入队失败: %v", err)
+	}
 
-	// 手动刷新队列（处理延迟文件）
+	// 手动刷新队列（会自动合并并发送所有延迟消息）
 	if err := api.FlushQueue(); err != nil {
 		log.Printf("刷新队列失败: %v", err)
 	}
@@ -83,11 +87,9 @@ func ExampleUsage() {
 	// 演示定时推送功能
 	fmt.Println("\n6. 演示定时推送功能")
 
-	// 创建定时消息（10秒钟后发送）
-	scheduledTime := time.Now().Add(10 * time.Second)
+	// 定时推送（会自动合并并发送所有延迟消息）
+	scheduledTime := time.Now().Add(1 * time.Minute)
 	scheduledMessage := NewNormalMessage("app3", "定时通知", "这是一条定时发送的消息")
-	scheduledMessage.SetMetadata("scheduled_reason", "reminder")
-
 	if err := api.PushAt(*scheduledMessage, options, scheduledTime); err != nil {
 		log.Printf("安排定时推送失败: %v", err)
 	} else {

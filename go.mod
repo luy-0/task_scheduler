@@ -1,12 +1,13 @@
 module task_scheduler
 
-go 1.21.0
+go 1.21.6
 
 toolchain go1.23.10
 
 require github.com/robfig/cron/v3 v3.0.1
 
 require (
+	github.com/easychen/serverchan-sdk-golang v1.0.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect

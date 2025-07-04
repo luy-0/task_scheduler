@@ -12,24 +12,20 @@ import (
 // PushController 核心推送控制器
 type PushController struct {
 	currentPusher  push_method.IPusher // 当前激活的推送器
-	delayHandler   DelayHandler        // 延迟处理模块
+	workingManager *WorkingManager     // 工作目录管理器
 	historyHandler *HistoryHandler     // 历史记录处理器
-	scheduler      *Scheduler          // 定时推送处理器
-	// pusherRouter  PusherRouter   // 推送策略路由
-	pushRegistry PusherRegistry // 推送器注册表
-	config       base.PushConfig
-	stopChan     chan struct{}
-	wg           sync.WaitGroup
-	mu           sync.RWMutex
+	pushRegistry   PusherRegistry      // 推送器注册表
+	config         base.PushConfig
+	stopChan       chan struct{}
+	wg             sync.WaitGroup
+	mu             sync.RWMutex
 }
 
 // NewPushController 创建推送控制器
 func NewPushController(cfg base.PushConfig) *PushController {
 	registry := NewPusherRegistry()
-	// router := NewSimplePusherRouter(registry)
 
 	return &PushController{
-		// pusherRouter: router,
 		pushRegistry:   registry,
 		historyHandler: NewHistoryHandler(cfg.HistoryDir),
 		config:         cfg,
@@ -46,7 +42,9 @@ func (pc *PushController) Initialize(cfg base.PushConfig, method base.PushMethod
 	var pusher push_method.IPusher
 	switch method {
 	case base.WeChat:
-		pusher = push_method.NewWeChatPusher()
+		// 使用配置中的sendKey创建微信推送器
+		wechatPusher := push_method.NewWeChatPusherWithKey(cfg.WeChatConfig.SendKey)
+		pusher = wechatPusher
 	case base.Email:
 		pusher = push_method.NewEmailPusher()
 	case base.SMS:
@@ -66,19 +64,11 @@ func (pc *PushController) Initialize(cfg base.PushConfig, method base.PushMethod
 	pc.config = cfg
 
 	// 创建延迟处理器
-	pc.delayHandler = NewFileDelayHandler(cfg.DelayDir, cfg.ProcessedDir, pusher, pc.historyHandler)
-
-	// 创建定时推送处理器
-	pc.scheduler = NewScheduler(cfg.WorkingDir, pusher, pc.historyHandler)
+	pc.workingManager = NewWorkingManager(cfg.WorkingDir, pusher, pc.historyHandler)
 
 	// 启动延迟处理器
-	if err := pc.delayHandler.Start(); err != nil {
+	if err := pc.workingManager.Start(); err != nil {
 		return fmt.Errorf("启动延迟处理器失败: %w", err)
-	}
-
-	// 启动定时推送处理器
-	if err := pc.scheduler.Start(); err != nil {
-		return fmt.Errorf("启动定时推送处理器失败: %w", err)
 	}
 
 	return nil
@@ -102,19 +92,11 @@ func (pc *PushController) InitializeWithPusher(cfg base.PushConfig, pusher push_
 	pc.config = cfg
 
 	// 创建延迟处理器
-	pc.delayHandler = NewFileDelayHandler(cfg.DelayDir, cfg.ProcessedDir, pusher, pc.historyHandler)
-
-	// 创建定时推送处理器
-	pc.scheduler = NewScheduler(cfg.WorkingDir, pusher, pc.historyHandler)
+	pc.workingManager = NewWorkingManager(cfg.WorkingDir, pusher, pc.historyHandler)
 
 	// 启动延迟处理器
-	if err := pc.delayHandler.Start(); err != nil {
+	if err := pc.workingManager.Start(); err != nil {
 		return fmt.Errorf("启动延迟处理器失败: %w", err)
-	}
-
-	// 启动定时推送处理器
-	if err := pc.scheduler.Start(); err != nil {
-		return fmt.Errorf("启动定时推送处理器失败: %w", err)
 	}
 
 	return nil
@@ -138,8 +120,15 @@ func (pc *PushController) PushNow(message base.Message, options base.PushOptions
 		return fmt.Errorf("推送选项验证失败: %w", err)
 	}
 
+	// 设置发送时间
+	sentTime := time.Now()
+	message.SetSentAt(sentTime)
+	message.SetSendStatus(base.StatusSuccess)
+
 	// 推送消息
 	if err := pc.currentPusher.Push(message); err != nil {
+		// 设置失败状态
+		message.SetSendStatus(base.StatusFailed)
 		// 记录推送失败
 		if pc.historyHandler != nil {
 			pc.historyHandler.RecordFailure(message, pc.currentPusher.GetName(), options, fmt.Sprintf("推送失败: %v", err))
@@ -153,6 +142,12 @@ func (pc *PushController) PushNow(message base.Message, options base.PushOptions
 	}
 
 	log.Printf("消息推送成功: %s", message.ID)
+
+	// 立即推送后，同时发送所有延迟消息
+	if err := pc.workingManager.SendAllDelayMessages(); err != nil {
+		log.Printf("发送延迟消息失败: %v", err)
+	}
+
 	return nil
 }
 
@@ -161,12 +156,12 @@ func (pc *PushController) Enqueue(message base.Message, options base.PushOptions
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
 
-	if pc.delayHandler == nil {
+	if pc.workingManager == nil {
 		return fmt.Errorf("延迟处理器未初始化")
 	}
 
 	// 将消息写入延迟文件
-	if err := pc.delayHandler.WriteDelayFile(message, options); err != nil {
+	if err := pc.workingManager.AddDelayMessage(message, options); err != nil {
 		return fmt.Errorf("写入延迟文件失败: %w", err)
 	}
 
@@ -179,11 +174,11 @@ func (pc *PushController) FlushQueue() error {
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
 
-	if pc.delayHandler == nil {
+	if pc.workingManager == nil {
 		return fmt.Errorf("延迟处理器未初始化")
 	}
 
-	return pc.delayHandler.ProcessDelayFiles()
+	return pc.workingManager.SendAllDelayMessages()
 }
 
 // PushAt 定时推送
@@ -191,8 +186,8 @@ func (pc *PushController) PushAt(message base.Message, options base.PushOptions,
 	pc.mu.RLock()
 	defer pc.mu.RUnlock()
 
-	if pc.scheduler == nil {
-		return fmt.Errorf("定时推送处理器未初始化")
+	if pc.workingManager == nil {
+		return fmt.Errorf("延迟处理器未初始化")
 	}
 
 	// 验证推送选项
@@ -201,7 +196,7 @@ func (pc *PushController) PushAt(message base.Message, options base.PushOptions,
 	}
 
 	// 安排定时消息
-	if err := pc.scheduler.ScheduleMessage(message, options, scheduledAt); err != nil {
+	if err := pc.workingManager.AddScheduledMessage(message, options, scheduledAt); err != nil {
 		return fmt.Errorf("安排定时消息失败: %w", err)
 	}
 
@@ -217,13 +212,8 @@ func (pc *PushController) Stop() {
 	close(pc.stopChan)
 
 	// 停止延迟处理器
-	if pc.delayHandler != nil {
-		pc.delayHandler.Stop()
-	}
-
-	// 停止定时推送处理器
-	if pc.scheduler != nil {
-		pc.scheduler.Stop()
+	if pc.workingManager != nil {
+		pc.workingManager.Stop()
 	}
 
 	pc.wg.Wait()

@@ -191,10 +191,14 @@ type PushOptions struct {
 type PushConfig struct {
 	QueueSize     int           `json:"queue_size"`     // 队列大小
 	FlushInterval time.Duration `json:"flush_interval"` // 刷新间隔
-	DelayDir      string        `json:"delay_dir"`      // 延迟文件目录
-	ProcessedDir  string        `json:"processed_dir"`  // 已处理文件目录
+	WorkingDir    string        `json:"working_dir"`    // 工作目录（存放延迟和定时消息）
 	HistoryDir    string        `json:"history_dir"`    // 历史消息记录目录
-	WorkingDir    string        `json:"working_dir"`    // 定时推送工作目录
+	WeChatConfig  WeChatConfig  `json:"wechat_config"`  // 微信推送配置
+}
+
+// WeChatConfig 微信推送配置
+type WeChatConfig struct {
+	SendKey string `json:"send_key"` // 方糖气球sendKey
 }
 
 // DefaultConfig 返回默认配置
@@ -202,17 +206,19 @@ func DefaultConfig() PushConfig {
 	return PushConfig{
 		QueueSize:     1000,
 		FlushInterval: 30 * time.Second,
-		DelayDir:      "./delay",
-		ProcessedDir:  "./processed",
-		HistoryDir:    "./history",
 		WorkingDir:    "./working",
+		HistoryDir:    "./history",
+		WeChatConfig: WeChatConfig{
+			SendKey: "SCT7671TOKWWHhBntijf0DfzgF5luGPa", // 默认sendKey
+		},
 	}
 }
 
 // DelayMessage 延迟消息结构
 type DelayMessage struct {
-	Message Message     `json:"message"`
-	Options PushOptions `json:"options"`
+	Message   Message     `json:"message"`
+	Options   PushOptions `json:"options"`
+	CreatedAt time.Time   `json:"created_at"` // 创建时间
 }
 
 // ScheduledMessage 定时消息结构
