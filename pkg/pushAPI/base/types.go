@@ -174,9 +174,10 @@ func (m *Message) SetSendStatus(status SendStatus) {
 // generateMessageID 生成消息ID
 func generateMessageID(appID string) string {
 	now := time.Now()
-	dateStr := now.Format("060102_150405") // YYMMDD格式
+	dateStr := now.Format("060102_150405")                // YYMMDD格式
+	nanoStr := fmt.Sprintf("%06d", now.Nanosecond()/1000) // 微秒部分
 
-	return fmt.Sprintf("%s_%s", appID, dateStr)
+	return fmt.Sprintf("%s_%s_%s", appID, dateStr, nanoStr)
 }
 
 // PushOptions 推送选项
@@ -192,6 +193,8 @@ type PushConfig struct {
 	FlushInterval time.Duration `json:"flush_interval"` // 刷新间隔
 	DelayDir      string        `json:"delay_dir"`      // 延迟文件目录
 	ProcessedDir  string        `json:"processed_dir"`  // 已处理文件目录
+	HistoryDir    string        `json:"history_dir"`    // 历史消息记录目录
+	WorkingDir    string        `json:"working_dir"`    // 定时推送工作目录
 }
 
 // DefaultConfig 返回默认配置
@@ -201,6 +204,8 @@ func DefaultConfig() PushConfig {
 		FlushInterval: 30 * time.Second,
 		DelayDir:      "./delay",
 		ProcessedDir:  "./processed",
+		HistoryDir:    "./history",
+		WorkingDir:    "./working",
 	}
 }
 
@@ -208,4 +213,59 @@ func DefaultConfig() PushConfig {
 type DelayMessage struct {
 	Message Message     `json:"message"`
 	Options PushOptions `json:"options"`
+}
+
+// ScheduledMessage 定时消息结构
+type ScheduledMessage struct {
+	Message     Message     `json:"message"`
+	Options     PushOptions `json:"options"`
+	ScheduledAt time.Time   `json:"scheduled_at"` // 计划发送时间
+}
+
+// HistoryRecord 历史记录结构
+type HistoryRecord struct {
+	Timestamp   time.Time `json:"timestamp"`    // 时间
+	AppID       string    `json:"app_id"`       // 发送方
+	PusherName  string    `json:"pusher_name"`  // 发送途径
+	Title       string    `json:"title"`        // 标题
+	Content     string    `json:"content"`      // 发送内容
+	MessageID   string    `json:"message_id"`   // 消息ID
+	Level       string    `json:"level"`        // 消息级别
+	Receivers   []string  `json:"receivers"`    // 接收者
+	Priority    int       `json:"priority"`     // 优先级
+	RetryCount  int       `json:"retry_count"`  // 重试次数
+	ErrorReason string    `json:"error_reason"` // 失败原因（仅失败记录）
+}
+
+// NewSuccessHistoryRecord 创建成功发送历史记录
+func NewSuccessHistoryRecord(msg Message, pusherName string, options PushOptions) *HistoryRecord {
+	return &HistoryRecord{
+		Timestamp:  time.Now(),
+		AppID:      msg.AppID,
+		PusherName: pusherName,
+		Title:      msg.Title,
+		Content:    msg.Content,
+		MessageID:  msg.ID,
+		Level:      msg.Level.String(),
+		Receivers:  options.Receivers,
+		Priority:   options.Priority,
+		RetryCount: options.Retry,
+	}
+}
+
+// NewFailedHistoryRecord 创建失败发送历史记录
+func NewFailedHistoryRecord(msg Message, pusherName string, options PushOptions, errorReason string) *HistoryRecord {
+	return &HistoryRecord{
+		Timestamp:   time.Now(),
+		AppID:       msg.AppID,
+		PusherName:  pusherName,
+		Title:       msg.Title,
+		Content:     msg.Content,
+		MessageID:   msg.ID,
+		Level:       msg.Level.String(),
+		Receivers:   options.Receivers,
+		Priority:    options.Priority,
+		RetryCount:  options.Retry,
+		ErrorReason: errorReason,
+	}
 }

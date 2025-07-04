@@ -174,6 +174,8 @@ type Config struct {
     FlushInterval time.Duration // 刷新间隔
     DelayDir      string        // 延迟文件目录
     ProcessedDir  string        // 已处理文件目录
+    HistoryDir    string        // 历史消息记录目录
+9    WorkingDir    string        // 定时推送工作目录
 }
 ```
 
@@ -184,8 +186,10 @@ func DefaultConfig() Config {
     return Config{
         QueueSize:     1000,
         FlushInterval: 30 * time.Second,
-        DelayDir:      "./delay",
-        ProcessedDir:  "./processed",
+        DelayDir:      "./tmp/delay",
+        ProcessedDir:  "./tmp/processed",
+        HistoryDir:    "./tmp/history",
+        WorkingDir:    "./tmp/working",
     }
 }
 ```
@@ -296,6 +300,102 @@ JSON格式，包含消息和推送选项
 - 使用文件锁保证并发安全
 - 成功推送后移动文件到processed目录
 - 失败时保留原文件并记录错误日志
+
+## 定时推送
+
+### 功能概述
+推送组件支持定时推送功能，可以指定消息在特定时间发送。
+
+### 时间精度
+- 时间精度为分钟，自动舍弃秒和毫秒
+- 每分钟检查一次是否有需要发送的消息
+
+### 文件组织
+- 按4小时时间段组织文件：`scheduled_20240101_08.json`、`scheduled_20240101_12.json`
+- 存储格式：JSON数组，每条记录包含消息、推送选项和计划发送时间
+
+### 定时推送API
+
+```go
+// 安排定时推送（1小时后发送）
+scheduledTime := time.Now().Add(1 * time.Hour)
+message := pushAPI.NewNormalMessage("app1", "定时通知", "这是一条定时消息")
+options := pushAPI.PushOptions{
+    Receivers: []string{"user1"},
+    Priority:  5,
+    Retry:     2,
+}
+
+if err := api.PushAt(*message, options, scheduledTime); err != nil {
+    log.Printf("安排定时推送失败: %v", err)
+} else {
+    fmt.Printf("定时消息已安排: %s -> %s\n", message.ID, scheduledTime.Format("15:04:05"))
+}
+```
+
+### 文件命名规则
+- 格式: `scheduled_YYYYMMDD_HH.json`
+- 示例: `scheduled_20240101_08.json` (1月1日8-12点时间段)
+- 时间段划分: 0-4点、4-8点、8-12点、12-16点、16-20点、20-24点
+
+### 处理机制
+- 每分钟触发一次检查
+- 扫描当前4小时时间段的文件
+- 发送到期的消息并从文件中移除
+- 自动记录发送历史（成功/失败）
+
+### 定时消息结构
+
+```go
+type ScheduledMessage struct {
+    Message     Message     // 消息内容
+    Options     PushOptions // 推送选项
+    ScheduledAt time.Time   // 计划发送时间
+}
+```
+
+## 历史记录
+
+### 功能概述
+推送组件会自动记录所有消息的发送历史，包括成功和失败的记录。
+
+### 文件组织
+- 按月份组织文件：`success_send_202401.json`、`failed_send_202401.json`
+- 存储格式：JSON数组，每条记录包含完整的消息和发送信息
+
+### 记录内容
+成功记录包含：
+- 时间戳
+- 发送方ID
+- 发送途径（推送器名称）
+- 消息标题
+- 消息内容
+- 消息ID
+- 消息级别
+- 接收者列表
+- 优先级
+- 重试次数
+
+失败记录额外包含：
+- 失败原因
+
+### 历史记录结构
+
+```go
+type HistoryRecord struct {
+    Timestamp   time.Time // 时间
+    AppID       string    // 发送方
+    PusherName  string    // 发送途径
+    Title       string    // 标题
+    Content     string    // 发送内容
+    MessageID   string    // 消息ID
+    Level       string    // 消息级别
+    Receivers   []string  // 接收者
+    Priority    int       // 优先级
+    RetryCount  int       // 重试次数
+    ErrorReason string    // 失败原因（仅失败记录）
+}
+```
 
 ## 错误处理
 

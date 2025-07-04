@@ -27,6 +27,8 @@ func (api *PushAPIImpl) Initialize(cfg Config, method PushMethod) error {
 		FlushInterval: cfg.FlushInterval,
 		DelayDir:      cfg.DelayDir,
 		ProcessedDir:  cfg.ProcessedDir,
+		HistoryDir:    cfg.HistoryDir,
+		WorkingDir:    cfg.WorkingDir,
 	}
 	coreMethod := method.ToCore()
 
@@ -49,6 +51,8 @@ func (api *PushAPIImpl) InitializeWithPusher(cfg Config, pusher Pusher) error {
 		FlushInterval: cfg.FlushInterval,
 		DelayDir:      cfg.DelayDir,
 		ProcessedDir:  cfg.ProcessedDir,
+		HistoryDir:    cfg.HistoryDir,
+		WorkingDir:    cfg.WorkingDir,
 	}
 
 	controller := core.NewPushController(coreConfig)
@@ -136,6 +140,34 @@ func (api *PushAPIImpl) FlushQueue() error {
 	}
 
 	return api.controller.FlushQueue()
+}
+
+// PushAt 定时推送
+func (api *PushAPIImpl) PushAt(message Message, options PushOptions, scheduledAt time.Time) error {
+	if api.controller == nil {
+		return fmt.Errorf("推送API未初始化")
+	}
+
+	// 如果消息ID为空，自动生成
+	if message.ID == "" {
+		coreMsg := base.NewMessage(message.AppID, message.Title, message.Content, message.Level.ToCore())
+		message.ID = coreMsg.ID
+	}
+
+	// 设置消息创建时间
+	if message.CreatedAt.IsZero() {
+		message.CreatedAt = time.Now()
+	}
+
+	// 设置发送状态为等待发送
+	message.SetSendStatus(StatusPending)
+
+	// 转换消息和选项
+	coreMessage := message.ToCore()
+	coreOptions := options.ToCore()
+
+	// 安排定时推送
+	return api.controller.PushAt(coreMessage, coreOptions, scheduledAt)
 }
 
 // Stop 停止推送API

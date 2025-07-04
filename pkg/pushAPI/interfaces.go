@@ -17,6 +17,9 @@ type PushAPI interface {
 	PushNow(message Message, options PushOptions) error
 	Enqueue(message Message, options PushOptions) error
 	FlushQueue() error
+
+	// 定时推送方法
+	PushAt(message Message, options PushOptions, scheduledAt time.Time) error
 }
 
 // Pusher 推送器接口
@@ -226,6 +229,8 @@ type Config struct {
 	FlushInterval time.Duration `json:"flush_interval"` // 刷新间隔
 	DelayDir      string        `json:"delay_dir"`      // 延迟文件目录
 	ProcessedDir  string        `json:"processed_dir"`  // 已处理文件目录
+	HistoryDir    string        `json:"history_dir"`    // 历史消息记录目录
+	WorkingDir    string        `json:"working_dir"`    // 定时推送工作目录
 }
 
 // DefaultConfig 返回默认配置
@@ -235,5 +240,7 @@ func DefaultConfig() Config {
 		FlushInterval: 30 * time.Second,
 		DelayDir:      "./tmp/delay",
 		ProcessedDir:  "./tmp/processed",
+		HistoryDir:    "./tmp/history",
+		WorkingDir:    "./tmp/working",
 	}
 }

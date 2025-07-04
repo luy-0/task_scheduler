@@ -16,21 +16,23 @@ import (
 
 // FileDelayHandler 文件延迟处理器
 type FileDelayHandler struct {
-	delayDir     string
-	processedDir string
-	pusher       push_method.IPusher
-	stopChan     chan struct{}
-	wg           sync.WaitGroup
-	mu           sync.Mutex
+	delayDir       string
+	processedDir   string
+	pusher         push_method.IPusher
+	historyHandler *HistoryHandler
+	stopChan       chan struct{}
+	wg             sync.WaitGroup
+	mu             sync.Mutex
 }
 
 // NewFileDelayHandler 创建文件延迟处理器
-func NewFileDelayHandler(delayDir, processedDir string, pusher push_method.IPusher) *FileDelayHandler {
+func NewFileDelayHandler(delayDir, processedDir string, pusher push_method.IPusher, historyHandler *HistoryHandler) *FileDelayHandler {
 	return &FileDelayHandler{
-		delayDir:     delayDir,
-		processedDir: processedDir,
-		pusher:       pusher,
-		stopChan:     make(chan struct{}),
+		delayDir:       delayDir,
+		processedDir:   processedDir,
+		pusher:         pusher,
+		historyHandler: historyHandler,
+		stopChan:       make(chan struct{}),
 	}
 }
 
@@ -129,7 +131,16 @@ func (h *FileDelayHandler) processDelayFile(entry fs.DirEntry) error {
 
 	// 推送消息
 	if err := h.pusher.Push(delayMsg.Message); err != nil {
+		// 记录推送失败
+		if h.historyHandler != nil {
+			h.historyHandler.RecordFailure(delayMsg.Message, h.pusher.GetName(), delayMsg.Options, fmt.Sprintf("延迟推送失败: %v", err))
+		}
 		return fmt.Errorf("推送消息失败: %w", err)
+	}
+
+	// 记录推送成功
+	if h.historyHandler != nil {
+		h.historyHandler.RecordSuccess(delayMsg.Message, h.pusher.GetName(), delayMsg.Options)
 	}
 
 	// 移动到已处理目录

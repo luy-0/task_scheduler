@@ -79,6 +79,37 @@ func ExampleUsage() {
 	fmt.Printf("消息ID: %s\n", message.ID)
 	fmt.Printf("消息状态: %s\n", message.SendStatus.String())
 	fmt.Printf("发送时间: %v\n", message.SentAt)
+
+	// 演示定时推送功能
+	fmt.Println("\n6. 演示定时推送功能")
+
+	// 创建定时消息（10秒钟后发送）
+	scheduledTime := time.Now().Add(10 * time.Second)
+	scheduledMessage := NewNormalMessage("app3", "定时通知", "这是一条定时发送的消息")
+	scheduledMessage.SetMetadata("scheduled_reason", "reminder")
+
+	if err := api.PushAt(*scheduledMessage, options, scheduledTime); err != nil {
+		log.Printf("安排定时推送失败: %v", err)
+	} else {
+		fmt.Printf("定时消息已安排: %s -> %s\n", scheduledMessage.ID, scheduledTime.Format("15:04:05"))
+	}
+
+	// 创建另一个定时消息（20秒后发送）
+	scheduledTime2 := time.Now().Add(20 * time.Second)
+	scheduledMessage2 := NewMessage("app3", "紧急定时通知", "这是一条紧急定时消息", Emergency)
+	scheduledMessage2.SetMetadata("scheduled_reason", "urgent_reminder")
+
+	if err := api.PushAt(*scheduledMessage2, options, scheduledTime2); err != nil {
+		log.Printf("安排定时推送失败: %v", err)
+	} else {
+		fmt.Printf("定时消息已安排: %s -> %s\n", scheduledMessage2.ID, scheduledTime2.Format("15:04:05"))
+	}
+
+	// 等待一段时间让定时推送处理器处理
+	fmt.Println("等待30秒让定时推送处理器处理...")
+	time.Sleep(30 * time.Second)
+
+	fmt.Println("定时推送演示完成")
 }
 
 // ExampleCustomPusher 自定义推送器示例

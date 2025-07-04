@@ -42,9 +42,9 @@ func TestNewMessage(t *testing.T) {
 	}
 }
 
-func TestNewMessageWithDefaultLevel(t *testing.T) {
+func TestNewNormalMessage(t *testing.T) {
 	// 测试使用默认级别创建消息
-	message := NewMessageWithDefaultLevel("app2", "默认标题", "默认内容")
+	message := NewNormalMessage("app2", "默认标题", "默认内容")
 
 	if message.Level != Normal {
 		t.Errorf("期望默认级别为Normal，实际为%v", message.Level)
@@ -74,7 +74,7 @@ func TestMessageIDGeneration(t *testing.T) {
 }
 
 func TestSetMetadata(t *testing.T) {
-	message := NewMessageWithDefaultLevel("app1", "标题", "内容")
+	message := NewNormalMessage("app1", "标题", "内容")
 
 	// 测试设置元数据
 	message.SetMetadata("key1", "value1")
@@ -96,7 +96,7 @@ func TestSetMetadata(t *testing.T) {
 }
 
 func TestSetSendStatus(t *testing.T) {
-	message := NewMessageWithDefaultLevel("app1", "标题", "内容")
+	message := NewNormalMessage("app1", "标题", "内容")
 
 	// 测试状态变化
 	message.SetSendStatus(StatusPending)
@@ -111,7 +111,7 @@ func TestSetSendStatus(t *testing.T) {
 }
 
 func TestSetSentAt(t *testing.T) {
-	message := NewMessageWithDefaultLevel("app1", "标题", "内容")
+	message := NewNormalMessage("app1", "标题", "内容")
 
 	// 测试设置发送时间
 	sentTime := time.Now()
