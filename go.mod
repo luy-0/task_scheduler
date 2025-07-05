@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	github.com/adshao/go-binance/v2 v2.8.3+incompatible
+	github.com/adshao/go-binance/v2 v2.8.3
 	github.com/easychen/serverchan-sdk-golang v1.0.0
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect

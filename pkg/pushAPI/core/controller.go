@@ -43,8 +43,12 @@ func (pc *PushController) Initialize(cfg base.PushConfig, method base.PushMethod
 	switch method {
 	case base.WeChat:
 		// 使用配置中的sendKey创建微信推送器
-		wechatPusher := push_method.NewWeChatPusherWithKey(cfg.WeChatConfig.SendKey)
-		pusher = wechatPusher
+		if cfg.WeChatConfig.SendKey != "" {
+			pusher = push_method.NewWeChatPusherWithKey(cfg.WeChatConfig.SendKey)
+		} else {
+			pusher = push_method.NewWeChatPusher()
+		}
+
 	case base.Email:
 		pusher = push_method.NewEmailPusher()
 	case base.SMS:

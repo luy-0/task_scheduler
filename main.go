@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -73,8 +72,8 @@ func main_main() {
 	taskManager.Start()
 
 	// 测试代码
-	taskMap := taskManager.GetTasks()
-	taskMap["auto-buy"].Task.Execute(context.Background())
+	// taskMap := taskManager.GetTasks()
+	// taskMap["auto-buy"].Task.Execute(context.Background())
 
 	// 等待中断信号
 	sigChan := make(chan os.Signal, 1)

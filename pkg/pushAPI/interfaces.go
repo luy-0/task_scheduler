@@ -214,6 +214,14 @@ type PushOptions struct {
 	Retry     int      `json:"retry"`     // 重试次数
 }
 
+func DefaultPushOptions() PushOptions {
+	return PushOptions{
+		Receivers: []string{"my"},
+		Priority:  1,
+		Retry:     1,
+	}
+}
+
 // ToCore 转换为内部PushOptions
 func (po *PushOptions) ToCore() base.PushOptions {
 	return base.PushOptions{

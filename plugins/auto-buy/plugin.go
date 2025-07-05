@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"task_scheduler/internal/plugins"
+	"task_scheduler/pkg/pushAPI"
 )
 
 // AutoBuyPlugin auto-buy插件实现
@@ -17,6 +18,7 @@ type AutoBuyTask struct {
 	config           map[string]interface{}
 	baseAmount       float64
 	ahr999TimerTable Ahr999TimerTable
+	pusher           pushAPI.PushAPI
 }
 
 // NewPlugin 创建auto-buy插件
@@ -83,6 +85,9 @@ func (p *AutoBuyPlugin) CreateTask(config map[string]interface{}) (plugins.Task,
 		return nil, fmt.Errorf("error, 配置中缺少 ahr999_timer_table")
 	}
 
+	task.pusher = pushAPI.NewPushAPI()
+	task.pusher.Initialize(pushAPI.DefaultConfig(), pushAPI.WeChat)
+
 	return task, nil
 }
 
@@ -146,8 +151,13 @@ func (t *AutoBuyTask) executeBitcoinStrategy(debug bool) error {
 
 	// TODO: 这里可以添加实际的交易逻辑
 	// 目前只是记录策略结果
-	log.Printf("比特币定投策略执行完成 - 价格: $%.2f, AHR999: %.3f, 建议定投: $%.2f",
+
+	log.Printf("比特币定投策略 - 价格: $%.2f, AHR999: %.3f, 建议定投: $%.2f",
 		currPrice, ahr999Value, investmentAmount)
+	title := fmt.Sprintf("定投大饼 - $%.2f USDT", investmentAmount)
+	content := fmt.Sprintf("价格: $%.2f\n\nAHR999: %.3f", currPrice, ahr999Value)
+	// 推送消息
+	t.pusher.PushNow(*pushAPI.NewNormalMessage("auto-buy", title, content), pushAPI.DefaultPushOptions())
 
 	return nil
 }

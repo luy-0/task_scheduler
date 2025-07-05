@@ -53,13 +53,6 @@ func (w *WeChatPusher) Push(msg base.Message) error {
 
 // Validate 验证推送选项
 func (w *WeChatPusher) Validate(options base.PushOptions) error {
-	if w.sendKey == "" {
-		return fmt.Errorf("sendKey不能为空")
-	}
-
-	if len(options.Receivers) == 0 {
-		return fmt.Errorf("接收者不能为空")
-	}
 
 	return nil
 }
@@ -97,10 +90,10 @@ func (w *WeChatPusher) buildMessageContent(msg base.Message) string {
 
 	// 构建完整内容
 	fullContent := fmt.Sprintf("【%s】\n", levelStr)
-	fullContent += fmt.Sprintf("时间: %s\n", timestamp)
-	fullContent += fmt.Sprintf("来源: %s\n", msg.AppID)
-	fullContent += fmt.Sprintf("消息ID: %s\n", msg.ID)
-	fullContent += fmt.Sprintf("内容: %s\n", content)
+	fullContent += fmt.Sprintf("时间: %s\n\n", timestamp)
+	fullContent += fmt.Sprintf("来源: %s\n\n", msg.AppID)
+	fullContent += fmt.Sprintf("消息ID: %s\n\n", msg.ID)
+	fullContent += fmt.Sprintf("内容: \n\n\n%s\n\n", content)
 
 	// 添加元数据
 	if len(msg.Metadata) > 0 {
