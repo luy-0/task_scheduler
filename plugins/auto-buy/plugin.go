@@ -2,6 +2,7 @@ package autobuy
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"task_scheduler/internal/plugins"
@@ -12,8 +13,10 @@ type AutoBuyPlugin struct{}
 
 // AutoBuyTask auto-buy任务实现
 type AutoBuyTask struct {
-	name   string
-	config map[string]interface{}
+	name             string
+	config           map[string]interface{}
+	baseAmount       float64
+	ahr999TimerTable Ahr999TimerTable
 }
 
 // NewPlugin 创建auto-buy插件
@@ -28,10 +31,59 @@ func (p *AutoBuyPlugin) Name() string {
 
 // CreateTask 创建任务实例
 func (p *AutoBuyPlugin) CreateTask(config map[string]interface{}) (plugins.Task, error) {
-	return &AutoBuyTask{
+	task := &AutoBuyTask{
 		name:   "auto-buy",
 		config: config,
-	}, nil
+	}
+
+	// 解析基准金额配置
+	if baseAmountRaw, exists := config["base_amount"]; exists {
+		if baseAmount, ok := baseAmountRaw.(float64); ok {
+			task.baseAmount = baseAmount
+		} else {
+			// 尝试从int转换
+			if baseAmountInt, ok := baseAmountRaw.(int); ok {
+				task.baseAmount = float64(baseAmountInt)
+			} else {
+				// 报错 yaml 中缺少参数
+				return nil, fmt.Errorf("error, 配置中缺少 base_amount")
+
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("error, 配置中缺少 base_amount")
+	}
+
+	// 解析AHR999倍数表配置
+	if timerTableRaw, exists := config["ahr999_timer_table"]; exists {
+		if timerTableStr, ok := timerTableRaw.(string); ok {
+			// 解析JSON字符串格式的倍数表
+			var timerTableMap map[string]interface{}
+			if err := json.Unmarshal([]byte(timerTableStr), &timerTableMap); err != nil {
+				return nil, fmt.Errorf("解析 ahr999_timer_table JSON 失败: %w", err)
+			}
+
+			task.ahr999TimerTable = make(Ahr999TimerTable)
+			for rangeStr, multiplierRaw := range timerTableMap {
+				var multiplier float64
+				switch v := multiplierRaw.(type) {
+				case float64:
+					multiplier = v
+				case int:
+					multiplier = float64(v)
+				default:
+					return nil, fmt.Errorf("倍数配置格式错误: %v", multiplierRaw)
+				}
+				task.ahr999TimerTable[rangeStr] = multiplier
+			}
+		} else {
+			return nil, fmt.Errorf("ahr999_timer_table 必须是字符串格式")
+		}
+	} else {
+		return nil, fmt.Errorf("error, 配置中缺少 ahr999_timer_table")
+	}
+
+	return task, nil
 }
 
 // GetDefaultConfig 获取默认配置
@@ -83,7 +135,10 @@ func (t *AutoBuyTask) executeBitcoinStrategy(debug bool) error {
 	}
 
 	// 根据AHR999指标决定定投策略
-	investmentAmount := t.calculateInvestmentAmount(ahr999Value)
+	investmentAmount, err := t.calculateInvestmentAmount(ahr999Value)
+	if err != nil {
+		return fmt.Errorf("计算定投金额失败: %w", err)
+	}
 
 	if debug {
 		log.Printf("建议定投金额: $%.2f", investmentAmount)
@@ -98,22 +153,15 @@ func (t *AutoBuyTask) executeBitcoinStrategy(debug bool) error {
 }
 
 // calculateInvestmentAmount 根据AHR999指标计算定投金额
-func (t *AutoBuyTask) calculateInvestmentAmount(ahr999 float64) float64 {
-	// 基础定投金额
-	baseAmount := 100.0
-
-	// 根据AHR999指标调整定投金额
-	// AHR999 < 0.5: 大幅增加定投 (熊市)
-	// AHR999 0.5-1.0: 正常定投
-	// AHR999 > 1.0: 减少定投 (牛市)
-
-	if ahr999 < 0.5 {
-		return baseAmount * 2.0 // 熊市加倍定投
-	} else if ahr999 > 1.0 {
-		return baseAmount * 0.5 // 牛市减半定投
-	} else {
-		return baseAmount // 正常定投
+func (t *AutoBuyTask) calculateInvestmentAmount(ahr999 float64) (float64, error) {
+	// 使用已解析的配置
+	if len(t.ahr999TimerTable) == 0 {
+		// 如果没有配置倍数表， 报错
+		return 0.0, fmt.Errorf("没有配置倍数表")
 	}
+
+	// 使用新的计算逻辑
+	return CalculateAmount(t.baseAmount, ahr999, t.ahr999TimerTable)
 }
 
 // ValidateConfig 验证配置

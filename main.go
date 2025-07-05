@@ -1,20 +1,29 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"task_scheduler/internal/config"
 	"task_scheduler/internal/core"
+	"task_scheduler/pkg/ccxt"
 	"task_scheduler/pkg/pushAPI"
-	"task_scheduler/plugins/app1"
-	"task_scheduler/plugins/app2"
 	autobuy "task_scheduler/plugins/auto-buy"
 )
 
 func main() {
-	main_pushAPI()
+	// main_autoBuy()
+	main_main()
+}
+
+func main_ccxt() {
+	ccxt.ExampleUsage()
+}
+
+func main_autoBuy() {
+	autobuy.ExampleUsage()
 }
 
 func main_pushAPI() {
@@ -42,8 +51,8 @@ func main_main() {
 	taskManager := core.NewTaskManager()
 
 	// 注册插件
-	taskManager.RegisterPlugin(app1.NewPlugin())
-	taskManager.RegisterPlugin(app2.NewPlugin())
+	// taskManager.RegisterPlugin(app1.NewPlugin())
+	// taskManager.RegisterPlugin(app2.NewPlugin())
 	taskManager.RegisterPlugin(autobuy.NewPlugin())
 
 	// 加载所有任务配置
@@ -63,6 +72,10 @@ func main_main() {
 	// 启动任务管理器
 	taskManager.Start()
 
+	// 测试代码
+	taskMap := taskManager.GetTasks()
+	taskMap["auto-buy"].Task.Execute(context.Background())
+
 	// 等待中断信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -74,4 +87,5 @@ func main_main() {
 	log.Println("正在停止定时任务调度器...")
 	taskManager.Stop()
 	log.Println("定时任务调度器已停止")
+
 }

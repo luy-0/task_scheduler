@@ -1,158 +1,220 @@
 package autobuy
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
-	"math"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
 	"time"
 )
 
-// GetAhr999 获取当前AHR999指标
+const (
+	// AHR999公开数据API
+	ahr999APIURL = "https://dncapi.flink1.com/api/v2/index/arh999?code=bitcoin&webp=1"
+	// 缓存目录
+	historyDir = "plugins/auto-buy/ahr999_history"
+	// 月份文件模板
+	monthFileTemplate = "%04d-%02d.json"
+)
+
+// Ahr999DataPoint 单条AHR999数据点
+type Ahr999DataPoint struct {
+	Date      string  `json:"date"`
+	Timestamp int64   `json:"timestamp"`
+	Ahr999    float64 `json:"ahr999"`
+	BtcPrice  float64 `json:"btc_price"`
+}
+
+// GetAhr999 获取当前AHR999（优先缓存，无则API并写入）
 func GetAhr999() (curr_btc_price, ahr999_value float64, err error) {
-	// 1. 获取当前价格
-	curr_btc_price, err = GetCurrentBitcoinPrice()
-	if err != nil {
-		return 0, 0, fmt.Errorf("获取当前比特币价格失败: %w", err)
+	today := time.Now().Format("2006-01-02")
+	point, err := getAhr999FromCache(today)
+	if err == nil && point != nil {
+		return point.BtcPrice, point.Ahr999, nil
 	}
-
-	// 2. 计算AHR999指标
-	ahr999_value, err = calculateAhr999(curr_btc_price)
+	// 缓存无则查API
+	points, err := fetchAhr999FromAPI()
 	if err != nil {
-		return 0, 0, fmt.Errorf("计算AHR999指标失败: %w", err)
+		return 0, 0, err
 	}
-
-	return curr_btc_price, ahr999_value, nil
+	// 写入新数据到缓存
+	if err := updateAhr999Cache(points); err != nil {
+		fmt.Printf("警告：写入AHR999缓存失败: %v\n", err)
+	}
+	// 再查一次缓存
+	point, err = getAhr999FromCache(today)
+	if err == nil && point != nil {
+		return point.BtcPrice, point.Ahr999, nil
+	}
+	return 0, 0, fmt.Errorf("未获取到有效的AHR999数据")
 }
 
-// GetAhr999At 获取指定时间的AHR999指标
-func GetAhr999At(when time.Time) (old_btc_price, old_ahr999_value float64, err error) {
-	// 注意：这个函数需要历史数据，目前简化实现
-	// 实际应用中可能需要查询历史数据库或缓存
-
-	// 获取当前价格作为近似值（实际应该查询历史价格）
-	old_btc_price, err = GetCurrentBitcoinPrice()
-	if err != nil {
-		return 0, 0, fmt.Errorf("获取历史比特币价格失败: %w", err)
+// GetAhr999At 获取指定日期AHR999（优先缓存，无则API并写入）
+func GetAhr999At(when time.Time) (btc_price, ahr999_value float64, err error) {
+	dateStr := when.Format("2006-01-02")
+	point, err := getAhr999FromCache(dateStr)
+	if err == nil && point != nil {
+		return point.BtcPrice, point.Ahr999, nil
 	}
-
-	// 计算历史AHR999指标
-	old_ahr999_value, err = calculateAhr999AtTime(old_btc_price, when)
+	// 缓存无则查API
+	points, err := fetchAhr999FromAPI()
 	if err != nil {
-		return 0, 0, fmt.Errorf("计算历史AHR999指标失败: %w", err)
+		return 0, 0, err
 	}
-
-	return old_btc_price, old_ahr999_value, nil
+	if err := updateAhr999Cache(points); err != nil {
+		fmt.Printf("警告：写入AHR999缓存失败: %v\n", err)
+	}
+	point, err = getAhr999FromCache(dateStr)
+	if err == nil && point != nil {
+		return point.BtcPrice, point.Ahr999, nil
+	}
+	return 0, 0, fmt.Errorf("未找到%s的AHR999数据", dateStr)
 }
 
-// calculateAhr999 计算AHR999指标
-func calculateAhr999(currentPrice float64) (float64, error) {
-	// 1. 获取时间范围
-	now := time.Now()
-	// before := now.AddDate(0, 0, -200) // 200天前 - 暂时未使用
+// fetchAhr999FromAPI 获取API数据，返回每天最早一条，按日期分组
+func fetchAhr999FromAPI() ([]Ahr999DataPoint, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	// 2. 获取比特币价格数据
-	prices, err := GetBitcoinPriceHistory(200)
+	req, err := http.NewRequestWithContext(ctx, "GET", ahr999APIURL, nil)
 	if err != nil {
-		return 0, fmt.Errorf("获取比特币价格历史数据失败: %w", err)
+		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
-
-	// 3. 计算200日均价（使用调和平均数）
-	avg, err := calculateHarmonicMean(prices)
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
-		return 0, fmt.Errorf("计算200日均价失败: %w", err)
+		return nil, fmt.Errorf("请求API失败: %w", err)
 	}
-
-	// 4. 计算彩虹带模型的理论价格
-	logprice, err := calculateRainbowPrice(now)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API返回错误状态码: %d", resp.StatusCode)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return 0, fmt.Errorf("计算彩虹带价格失败: %w", err)
+		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
-
-	// 5. 计算AHR999指标
-	ahr999 := (currentPrice / avg) * (currentPrice / logprice)
-
-	// 保留3位小数
-	ahr999 = math.Round(ahr999*1000) / 1000
-
-	return ahr999, nil
-}
-
-// calculateAhr999AtTime 计算指定时间的AHR999指标
-func calculateAhr999AtTime(priceAtTime float64, when time.Time) (float64, error) {
-	// 计算指定时间200天前的日期
-	// before := when.AddDate(0, 0, -200) // 暂时未使用
-
-	// 获取历史价格数据（简化实现，实际应该查询历史数据）
-	prices, err := GetBitcoinPriceHistory(200)
-	if err != nil {
-		return 0, fmt.Errorf("获取历史比特币价格数据失败: %w", err)
+	var response struct {
+		Code int             `json:"code"`
+		Msg  string          `json:"msg"`
+		Data [][]interface{} `json:"data"`
 	}
-
-	// 计算200日均价
-	avg, err := calculateHarmonicMean(prices)
-	if err != nil {
-		return 0, fmt.Errorf("计算历史200日均价失败: %w", err)
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("解析API响应失败: %w", err)
 	}
-
-	// 计算彩虹带模型的理论价格
-	logprice, err := calculateRainbowPrice(when)
-	if err != nil {
-		return 0, fmt.Errorf("计算历史彩虹带价格失败: %w", err)
+	if response.Code != 200 {
+		return nil, fmt.Errorf("API返回错误: %s", response.Msg)
 	}
-
-	// 计算AHR999指标
-	ahr999 := (priceAtTime / avg) * (priceAtTime / logprice)
-
-	// 保留3位小数
-	ahr999 = math.Round(ahr999*1000) / 1000
-
-	return ahr999, nil
-}
-
-// calculateHarmonicMean 计算调和平均数
-func calculateHarmonicMean(prices [][]float64) (float64, error) {
-	if len(prices) == 0 {
-		return 0, fmt.Errorf("价格数据为空")
-	}
-
-	var sum float64
-	count := 0
-
-	for _, priceData := range prices {
-		if len(priceData) >= 2 {
-			price := priceData[1] // 价格在数组的第二个位置
-			if price > 0 {
-				sum += 1.0 / price
-				count++
+	// 按天分组，选取每天最早一条
+	dayMap := make(map[string]Ahr999DataPoint)
+	for _, row := range response.Data {
+		if len(row) >= 5 {
+			timestamp, ok1 := row[0].(float64)
+			ahr999, ok2 := row[1].(float64)
+			btcPrice, ok3 := row[2].(float64)
+			if ok1 && ok2 && ok3 {
+				t := time.Unix(int64(timestamp), 0)
+				date := t.Format("2006-01-02")
+				point := Ahr999DataPoint{
+					Date:      date,
+					Timestamp: int64(timestamp),
+					Ahr999:    ahr999,
+					BtcPrice:  btcPrice,
+				}
+				// 只保留当天最早的
+				if old, ok := dayMap[date]; !ok || point.Timestamp < old.Timestamp {
+					dayMap[date] = point
+				}
 			}
 		}
 	}
-
-	if count == 0 {
-		return 0, fmt.Errorf("没有有效的价格数据")
+	// 转为slice并按时间逆序
+	var points []Ahr999DataPoint
+	for _, v := range dayMap {
+		points = append(points, v)
 	}
-
-	// 调和平均数 = n / (1/x1 + 1/x2 + ... + 1/xn)
-	harmonicMean := float64(count) / sum
-
-	return harmonicMean, nil
+	sort.Slice(points, func(i, j int) bool {
+		return points[i].Timestamp > points[j].Timestamp
+	})
+	return points, nil
 }
 
-// calculateRainbowPrice 计算彩虹带模型的理论价格
-func calculateRainbowPrice(when time.Time) (float64, error) {
-	// 比特币诞生时间：2009-01-03
-	bitcoinBirth := time.Date(2009, 1, 3, 0, 0, 0, 0, time.UTC)
-
-	// 计算比特币年龄（天数）
-	duration := when.Sub(bitcoinBirth)
-	age := duration.Hours() / 24.0
-
-	if age <= 0 {
-		return 0, fmt.Errorf("无效的比特币年龄")
+// updateAhr999Cache 按月写入新数据，每天只保留一条（最早的）
+func updateAhr999Cache(points []Ahr999DataPoint) error {
+	if err := os.MkdirAll(historyDir, 0755); err != nil {
+		return err
 	}
+	// 按月分组
+	monthMap := make(map[string][]Ahr999DataPoint)
+	for _, p := range points {
+		month := p.Date[:7] // yyyy-MM
+		monthMap[month] = append(monthMap[month], p)
+	}
+	for month, pts := range monthMap {
+		filePath := filepath.Join(historyDir, month+".json")
+		// 读取已有数据
+		existing := make(map[string]Ahr999DataPoint)
+		f, err := os.Open(filePath)
+		if err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				var dp Ahr999DataPoint
+				if err := json.Unmarshal(scanner.Bytes(), &dp); err == nil {
+					existing[dp.Date] = dp
+				}
+			}
+			f.Close()
+		}
+		// 合并新数据（只保留最早的）
+		for _, p := range pts {
+			if old, ok := existing[p.Date]; !ok || p.Timestamp < old.Timestamp {
+				existing[p.Date] = p
+			}
+		}
+		// 写回文件（按日期逆序）
+		var all []Ahr999DataPoint
+		for _, v := range existing {
+			all = append(all, v)
+		}
+		sort.Slice(all, func(i, j int) bool {
+			return all[i].Timestamp > all[j].Timestamp
+		})
+		f, err = os.Create(filePath)
+		if err != nil {
+			return err
+		}
+		w := bufio.NewWriter(f)
+		for _, v := range all {
+			b, _ := json.Marshal(v)
+			w.WriteString(string(b) + "\n")
+		}
+		w.Flush()
+		f.Close()
+	}
+	return nil
+}
 
-	// 彩虹带模型公式：logprice = 10^(5.84 * log10(age) - 17.01)
-	logAge := math.Log10(age)
-	logprice := math.Pow(10, 5.84*logAge-17.01)
-
-	return logprice, nil
+// getAhr999FromCache 按日期查找缓存
+func getAhr999FromCache(date string) (*Ahr999DataPoint, error) {
+	month := date[:7]
+	filePath := filepath.Join(historyDir, month+".json")
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var dp Ahr999DataPoint
+		if err := json.Unmarshal(scanner.Bytes(), &dp); err == nil {
+			if dp.Date == date {
+				return &dp, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("缓存中无%s的数据", date)
 }
