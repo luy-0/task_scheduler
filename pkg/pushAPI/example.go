@@ -75,7 +75,6 @@ func ExampleUsage() {
 
 	// 获取队列大小（现在总是0，因为使用文件存储）
 	if impl, ok := api.(*PushAPIImpl); ok {
-		fmt.Printf("队列大小: %d\n", impl.GetQueueSize())
 		fmt.Printf("已注册的推送器: %v\n", impl.GetRegisteredPushers())
 	}
 

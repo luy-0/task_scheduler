@@ -1,0 +1,4 @@
+schedule: "0 0 8 * * *"  # 每日上午8点执行
+params:
+  enabled: true
+  debug: false 

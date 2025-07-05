@@ -10,6 +10,7 @@ import (
 	"task_scheduler/pkg/pushAPI"
 	"task_scheduler/plugins/app1"
 	"task_scheduler/plugins/app2"
+	autobuy "task_scheduler/plugins/auto-buy"
 )
 
 func main() {
@@ -43,6 +44,7 @@ func main_main() {
 	// 注册插件
 	taskManager.RegisterPlugin(app1.NewPlugin())
 	taskManager.RegisterPlugin(app2.NewPlugin())
+	taskManager.RegisterPlugin(autobuy.NewPlugin())
 
 	// 加载所有任务配置
 	tasks, err := loader.LoadAllTasks(mainConfig)

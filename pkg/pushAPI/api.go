@@ -171,16 +171,7 @@ func (api *PushAPIImpl) Stop() {
 	if api.controller != nil {
 		api.controller.Stop()
 	}
-}
-
-// GetQueueSize 获取队列大小
-func (api *PushAPIImpl) GetQueueSize() int {
-	if api.controller == nil {
-		return 0
-	}
-	return 0 // 现在使用文件存储，队列大小为0
-}
-
+} 
 // GetRegisteredPushers 获取已注册的推送器列表
 func (api *PushAPIImpl) GetRegisteredPushers() []string {
 	if api.controller == nil {

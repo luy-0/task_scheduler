@@ -6,4 +6,7 @@ tasks:
     enabled: true
   - name: "app2"
     config_file: "configs/tasks/app2.yaml"
+    enabled: true
+  - name: "auto-buy"
+    config_file: "configs/tasks/auto-buy.yaml"
     enabled: true 
