@@ -166,7 +166,7 @@ func (t *AutoBuyTask) executeBitcoinStrategy(debug bool) error {
 	title := fmt.Sprintf("定投大饼 - $%.2f USDT", investmentAmount)
 	content := fmt.Sprintf("价格: $%.2f\n\nAHR999: %.3f\n\n定投结果: %s\n\nBTC余额: %s", currPrice, ahr999Value, buyResult, btcBalance)
 	// 推送消息
-	// t.pusher.PushNow(*pushAPI.NewNormalMessage("auto-buy", title, content), pushAPI.DefaultPushOptions())
+	t.pusher.PushNow(*pushAPI.NewNormalMessage("auto-buy", title, content), pushAPI.DefaultPushOptions())
 	fmt.Println(title)
 	fmt.Println(content)
 
