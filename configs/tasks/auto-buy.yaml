@@ -1,4 +1,4 @@
-schedule: "0 0 8 * * *"  # 每日上午8点执行
+schedule: "0 45 10 * * *"  # 每月30号上午10点30分执行
 params:
   enabled: true
   debug: false 

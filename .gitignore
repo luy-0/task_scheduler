@@ -1,3 +1,9 @@
+# Environment variables
+.env
+.env.*
+.env.local
+.env.*.local
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -47,6 +53,9 @@ logs/
 build/
 dist/
 bin/
+data/
+.cursor/
+plugins/auto-buy/ahr999_history/
 
 # Temporary files
 tmp/

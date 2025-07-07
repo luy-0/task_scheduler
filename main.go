@@ -14,11 +14,13 @@ import (
 
 func main() {
 	// main_autoBuy()
+	// main_ccxt()
 	main_main()
 }
 
 func main_ccxt() {
-	ccxt.ExampleUsage()
+	// ccxt.ExampleUsage()
+	ccxt.ExampleUsageWithAuth()
 }
 
 func main_autoBuy() {
@@ -73,6 +75,7 @@ func main_main() {
 
 	// 测试代码
 	// taskMap := taskManager.GetTasks()
+	// log.Println("taskMap: ", taskMap)
 	// taskMap["auto-buy"].Task.Execute(context.Background())
 
 	// 等待中断信号

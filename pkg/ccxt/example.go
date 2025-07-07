@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 )
 
@@ -80,4 +81,36 @@ func ExampleUsage() {
 	}
 
 	fmt.Println("\n=== 示例完成 ===")
+}
+
+func ExampleUsageWithAuth() {
+	fmt.Println("\n=== ExampleUsageBuyCoin 示例开始 ===")
+	apiKey := os.Getenv("BINANCE_API_KEY")
+	secretKey := os.Getenv("BINANCE_SECRET_KEY")
+
+	client := NewClient(apiKey, secretKey, "")
+	err := client.Ping(context.Background())
+	if err != nil {
+		fmt.Println("Ping失败: ", err)
+	} else {
+		fmt.Println("Ping成功")
+	}
+
+	fmt.Println("\n=== 获取账户金额信息 ===")
+	fmt.Println(client.GetAccountBalance(context.Background()))
+
+	fmt.Println("\n=== 购买BTC ===")
+	// fmt.Println(client.BuyCoinByMarketPrice(context.Background(), "BTCUSDT", 10))
+
+	fmt.Println("\n=== 获取BTC订单盘口 ===")
+	bestSellPrice, bestBuyPrice, _ := client.GetBestPrice(context.Background(), "BTCUSDT")
+	fmt.Printf("✓ 最优卖价: $%.2f, 最优买价: $%.2f\n", bestSellPrice, bestBuyPrice)
+
+	fmt.Println("\n=== 最优价购买BTC ===")
+	// fmt.Println(client.BuyCoinByBestPrice(context.Background(), "BTCUSDT", 11))
+
+	fmt.Println("\n=== 获取BTC余额 ===")
+	fmt.Println(client.GetBTCBalance(context.Background()))
+
+	fmt.Println("\n=== ExampleUsageBuyCoin 示例完成 ===")
 }

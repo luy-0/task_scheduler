@@ -2,7 +2,12 @@ package ccxt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
+	"math"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/adshao/go-binance/v2"
@@ -18,18 +23,37 @@ type Client struct {
 
 // NewClient 创建新的CCXT客户端
 func NewClient(apiKey, secretKey, proxyUrl string) *Client {
-	return &Client{
+	if proxyUrl == "" {
+		proxyUrl = os.Getenv("HTTPS_PROXY")
+		if proxyUrl == "" {
+			proxyUrl = "http://127.0.0.1:7890" // 默认回退
+		}
+	}
+	if apiKey == "" || secretKey == "" {
+		log.Println("apiKey or secretKey is empty")
+	}
+	cli := &Client{
 		spotClient: binance.NewProxiedClient(apiKey, secretKey, proxyUrl),
 		apiKey:     apiKey,
 		secretKey:  secretKey,
 		proxyUrl:   proxyUrl,
 	}
+	btcPrice, err := cli.GetBTCPrice(context.Background())
+	if err != nil {
+		log.Println("CCXT Client 初始化结果: \n BTC价格获取失败", err)
+	} else {
+		log.Println("CCXT Client 初始化结果: \n BTC价格", btcPrice)
+	}
+	return cli
 }
 
 // NewClientWithoutAuth 创建无需认证的客户端（仅用于公开接口）
 func NewClientWithoutAuth(proxyUrl string) *Client {
 	if proxyUrl == "" {
-		proxyUrl = "http://127.0.0.1:7890"
+		proxyUrl = os.Getenv("HTTPS_PROXY")
+		if proxyUrl == "" {
+			proxyUrl = "http://127.0.0.1:7890"
+		}
 	}
 	return &Client{
 		spotClient: binance.NewProxiedClient("", "", proxyUrl),
@@ -272,5 +296,93 @@ func absDuration(d time.Duration) time.Duration {
 func parseFloat(s string) (float64, error) {
 	var f float64
 	_, err := fmt.Sscanf(s, "%f", &f)
-	return f, err
+	if err != nil {
+		fmt.Println("解析价格失败: ", err)
+		return 0, err
+	}
+	return f, nil
+}
+
+// jsonAnything 辅助函数：将任何类型转换按照美化后的json格式输出
+func jsonAnything(v any) string {
+	json, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "json marshal error"
+	}
+	return string(json)
+}
+
+// 获取账户金额信息
+func (c *Client) GetAccountBalance(ctx context.Context) string {
+	// 传入 omitZeroBalances == true 来过滤掉零余额的资产
+	balance, err := c.spotClient.NewGetAccountService().OmitZeroBalances(true).Do(ctx)
+	if err != nil {
+		return fmt.Sprintf("获取账户金额信息失败: %v", err)
+	}
+	return jsonAnything(balance)
+}
+
+// 获取账户的BTC余额
+func (c *Client) GetBTCBalance(ctx context.Context) string {
+	account, err := c.spotClient.NewGetAccountService().OmitZeroBalances(true).Do(ctx)
+	if err != nil {
+		return fmt.Sprintf("获取账户失败: %v", err)
+	}
+	balance := account.Balances
+	for _, balance := range balance {
+		if balance.Asset == "BTC" {
+			return balance.Free
+		}
+	}
+	return "0"
+}
+
+// 依照传入的 Symbol 和 Amount 按照市价购买指定数量的币
+// 参数: symbol: 币种名称(BTCUSDT), amount: 购买数量(USDT)
+func (c *Client) BuyCoinByMarketPrice(ctx context.Context, symbol string, amount float64) string {
+	order, err := c.spotClient.NewCreateOrderService().Symbol(symbol).Side(binance.SideTypeBuy).Type(binance.OrderTypeMarket).QuoteOrderQty(strconv.FormatFloat(amount, 'f', -1, 64)).Do(ctx)
+	if err != nil {
+		return fmt.Sprintf("购买%s失败: %v", symbol, err)
+	}
+	return jsonAnything(order)
+}
+
+// 依照传入的 Symbol 和 Amount 按照最优价购买指定数量的币
+// 参数: symbol: 币种名称(BTCUSDT), amount: 购买金额(USDT)
+// 首先获取当前订单盘口，然后根据盘口价格计算最优价
+func (c *Client) BuyCoinByBestPrice(ctx context.Context, symbol string, amount float64) string {
+	bestSellPrice, _, err := c.GetBestPrice(ctx, symbol)
+	if err != nil {
+		return fmt.Sprintf("获取%s订单盘口失败: %v", symbol, err)
+	}
+	acount := amount / bestSellPrice
+	acount = math.Round(acount*100000) / 100000
+	fmt.Printf("购买数量: %.5f\n", acount)
+	order, err := c.spotClient.NewCreateOrderService().Symbol(symbol).Side(binance.SideTypeBuy).
+		Type(binance.OrderTypeLimit).
+		Price(strconv.FormatFloat(bestSellPrice, 'f', -1, 64)).
+		TimeInForce(binance.TimeInForceTypeGTC).
+		Quantity(strconv.FormatFloat(acount, 'f', -1, 64)).
+		Do(ctx)
+	if err != nil {
+		return fmt.Sprintf("购买%s失败: %v", symbol, err)
+	}
+	return jsonAnything(order)
+}
+
+// 获取当前订单盘口
+func (c *Client) GetBestPrice(ctx context.Context, symbol string) (bestSellPrice, bestBuyPrice float64, err error) {
+	orderBook, err := c.spotClient.NewListBookTickersService().Symbol(symbol).Do(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("获取%s订单盘口失败: %v", symbol, err)
+	}
+	bestSellPrice, err = parseFloat(orderBook[0].AskPrice)
+	if err != nil {
+		return 0, 0, fmt.Errorf("获取%s订单盘口失败: %v", symbol, err)
+	}
+	bestBuyPrice, err = parseFloat(orderBook[0].BidPrice)
+	if err != nil {
+		return 0, 0, fmt.Errorf("获取%s订单盘口失败: %v", symbol, err)
+	}
+	return
 }

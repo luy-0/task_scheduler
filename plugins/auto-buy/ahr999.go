@@ -144,6 +144,7 @@ func fetchAhr999FromAPI() ([]Ahr999DataPoint, error) {
 }
 
 // updateAhr999Cache 按月写入新数据，每天只保留一条（最早的）
+// 只记录 2024.01 以来的数据，之前的忽略
 func updateAhr999Cache(points []Ahr999DataPoint) error {
 	if err := os.MkdirAll(historyDir, 0755); err != nil {
 		return err
@@ -152,6 +153,9 @@ func updateAhr999Cache(points []Ahr999DataPoint) error {
 	monthMap := make(map[string][]Ahr999DataPoint)
 	for _, p := range points {
 		month := p.Date[:7] // yyyy-MM
+		if month < "2024-01" {
+			continue
+		}
 		monthMap[month] = append(monthMap[month], p)
 	}
 	for month, pts := range monthMap {
@@ -171,6 +175,9 @@ func updateAhr999Cache(points []Ahr999DataPoint) error {
 		}
 		// 合并新数据（只保留最早的）
 		for _, p := range pts {
+			if p.Date < "2024-01-01" {
+				continue
+			}
 			if old, ok := existing[p.Date]; !ok || p.Timestamp < old.Timestamp {
 				existing[p.Date] = p
 			}

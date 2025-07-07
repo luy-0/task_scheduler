@@ -48,7 +48,7 @@ vendor/
 
 # 环境文件
 .env
-.env.local
+.env.*
 .env.*.local
 
 # 其他

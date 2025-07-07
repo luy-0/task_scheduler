@@ -6,9 +6,9 @@ import (
 )
 
 func ExampleUsage() {
-	// exampleGetAhr999()
+	exampleGetAhr999()
 	// exampleGetAhr999At()
-	exampleCalculateAmount()
+	// exampleCalculateAmount()
 }
 
 func exampleGetAhr999() {

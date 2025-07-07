@@ -71,7 +71,22 @@ task_scheduler/
 
 ### 环境变量
 
+#### 基础配置
 - `TZ=Asia/Shanghai` - 设置时区
+
+#### API 密钥配置
+项目需要配置 Binance API 密钥。请创建 `.env` 文件：
+
+```bash
+# 创建 .env 文件
+cat > .env << EOF
+# Binance API Configuration
+BINANCE_API_KEY=your_binance_api_key_here
+BINANCE_SECRET_KEY=your_binance_secret_key_here
+EOF
+```
+
+**安全提醒：** 确保 `.env` 文件不会被提交到版本控制中。
 
 ### 挂载目录
 

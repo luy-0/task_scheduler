@@ -9,6 +9,7 @@ CONTAINER_NAME = task-scheduler
 .PHONY: help
 help:
 	@echo "可用的命令:"
+	@echo "  make env-setup  - 设置环境变量文件"
 	@echo "  make build      - 构建 Docker 镜像"
 	@echo "  make run        - 运行容器"
 	@echo "  make stop       - 停止容器"
@@ -60,6 +61,12 @@ clean:
 	docker rm $(CONTAINER_NAME) || true
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 	@echo "清理完成"
+
+# 设置环境变量文件
+.PHONY: env-setup
+env-setup:
+	@echo "设置环境变量文件..."
+	@./scripts/setup-env.sh
 
 # 验证 Dockerfile
 .PHONY: validate
