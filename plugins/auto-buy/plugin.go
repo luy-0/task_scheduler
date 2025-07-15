@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"task_scheduler/internal/plugins"
 	"task_scheduler/pkg/ccxt"
 	"task_scheduler/pkg/pushAPI"
@@ -150,21 +151,24 @@ func (t *AutoBuyTask) executeBitcoinStrategy(debug bool) error {
 		log.Printf("建议定投金额: $%.2f", investmentAmount)
 	}
 
-	// TODO: 这里可以添加实际的交易逻辑
-	// 目前只是记录策略结果
-
-	buyResult := "未执行定投任务"
+	buyResult := "未执行"
+	buyMsg := ""
 	ccxtClient := ccxt.NewClient(os.Getenv("BINANCE_API_KEY"), os.Getenv("BINANCE_SECRET_KEY"), "")
 	if investmentAmount > 0 {
 		// 如果定投金额>0，调用 ccxt 库进行定投
-		buyResult = ccxtClient.BuyCoinByBestPrice(context.Background(), "BTCUSDT", investmentAmount)
+		buyMsg = ccxtClient.BuyCoinByBestPrice(context.Background(), "BTCUSDT", investmentAmount)
+		if strings.Contains(buyMsg, "失败") {
+			buyResult = "定投失败"
+		} else {
+			buyResult = "定投成功"
+		}
 	}
 
 	btcBalance := ccxtClient.GetBTCBalance(context.Background())
 
 	// 推送消息, 包括当前价格/当前指标/定投结果(成功或失败)
-	title := fmt.Sprintf("定投大饼 - $%.2f USDT", investmentAmount)
-	content := fmt.Sprintf("价格: $%.2f\n\nAHR999: %.3f\n\n定投结果: %s\n\nBTC余额: %s", currPrice, ahr999Value, buyResult, btcBalance)
+	title := fmt.Sprintf("定投大饼 %v: $%.2f USDT", buyResult, investmentAmount)
+	content := fmt.Sprintf("当前价格: $%.2f\n\nAHR999: %.3f\n\nBTC余额: %s\n\n详细信息: %s", currPrice, ahr999Value, btcBalance, buyMsg)
 	// 推送消息
 	t.pusher.PushNow(*pushAPI.NewNormalMessage("auto-buy", title, content), pushAPI.DefaultPushOptions())
 	fmt.Println(title)
